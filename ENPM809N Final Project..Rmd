@@ -1,0 +1,362 @@
+---
+title: "ENPM809N Data Mining Final Project"
+author: "Pranav P. Jaipurkar (115798120)"
+date: "11/30/2018"
+output: html_document
+---
+Comment: Importing the dataset
+
+```{r}
+library(readxl)
+xy1 <- read_excel("~/Desktop/Data Mining 809N/809N Project/xy1.xlsx")
+View(xy1)
+```
+Comment: 
+Partitioning complete dataset into training dataset and test dataset
+
+```{r}
+set.seed(7658)
+index <- sample(2, nrow(xy1), replace = T, prob = c(0.7, 0.3))
+train.data <- xy1[index == 1, ]
+View(train.data)
+test.data <- xy1[index == 2, ]
+View(test.data)
+```
+Comment: 
+Confirming the split done
+```{r}
+dim(xy1)
+dim(train.data)
+dim(test.data)
+```
+Commment: 
+As we can see that the dataset has been splitted properly.
+
+Finding correlation-
+```{r}
+cor(xy1)
+pairs(xy1)
+```
+Comment: 
+Question 1 and Question 3-
+Making linear model with all independent variables on complete dataset
+```{r}
+model1 <- lm(Response ~., data  = xy1)
+summary(model1)
+```
+Comment: 
+1) As we see, the independent variables Var05, Var06, Var09, Var11, Var15 have most significant contribution to the output (Response)(3 stars).
+2) As we see, the independent variables Var18 have a decent amount of contribution to the output (Response)(2 stars).
+3) As we see, the independent variables Var03, Var10, Var13, Var16 have some contribution to the output (Response)(1 star).
+
+Multicollinearity Test-
+```{r}
+library(car)
+vif(model1)
+```
+Comment: 
+1) As we can see that the independent variables Var03, Var04, Var08, Va10, Var16 are highly correlated because they have a high vif coefficient.
+2) Independent variables Var05, Var06, Var18 have a least vif coefficients, so they should definitely be part of linear models.
+3) Variables Var17, Var01, Var11, Var07, Var02 and Var15 are somewhat correlated but they have a significant contribution in the model1.
+4) So our final reduced model will have Var05, Var06, Var11, Var15, Var18 as independent variables by taking into consideration the summary of model1 and VIF coefficients.
+5) But, I will definnitely try for other models.
+```{r}
+reducedmodel1 <- lm(Response ~ Var05 + Var06 + Var11 + Var15 + Var18, data = train.data)
+summary(reducedmodel1)
+```
+Comment: 
+From the  summary, I can say that all the independent variables have a contribution towards the model.
+```{r}
+vif(reducedmodel1)
+```
+Comment: 
+Vif coefficients are also close to 1.
+```{r}
+reducedmodel2 <- lm(Response ~ Var05 + Var06 + Var11 + Var18, data = train.data)
+summary(reducedmodel2)
+```
+Comment: 
+From the summary, I can say that, all the independent variables have a contribution towards the model.
+
+```{r}
+vif(reducedmodel2)
+```
+Comment: 
+Vif coefficients are also close to 1.
+```{r}
+reducedmodel3 <- lm(Response ~ Var05 + Var06 + Var15 + Var18, data = train.data)
+summary(reducedmodel3)
+```
+Comment: 
+As we see, the independent variable Var05 is insignificant in this model.
+```{r}
+vif(reducedmodel3)
+```
+Comment: 
+Vif values of all the variables are close to 1.
+```{r}
+reducedmodel4 <- lm(Response ~ Var05 + Var06 + Var18, data = train.data)
+summary(reducedmodel4)
+```
+Comment: 
+As we see, the independent variable Var05 is insignificant in this model.
+```{r}
+vif(reducedmodel4)
+```
+Comment: 
+Vif values of all the variables are close to 1.
+Anova
+```{r}
+anova(reducedmodel1, reducedmodel2, reducedmodel3, reducedmodel4)
+```
+Final model decision-
+1) From the anova function, it can be said that the reduced model4 is highly significant.
+2) Hence, Var05, Var06 and Var18 are the three final independent variables in the model.
+Plotting-
+```{r}
+library(ggplot2)
+require(gridExtra)
+p1 <- ggplot(xy1, aes(x=Var05, y=Response))+geom_point()+stat_smooth(method = "lm", col = "red")+labs(x="Var05",y="Response")
+p2 <- ggplot(xy1, aes(x=Var06, y=Response))+geom_point()+stat_smooth(method = "lm", col = "red")+labs(x="Var06",y="Response")
+p3 <- ggplot(xy1, aes(x=Var18, y=Response))+geom_point()+stat_smooth(method = "lm", col = "red")+labs(x="Var18",y="Response")
+grid.arrange(p1, p2, p3, ncol=3)
+```
+Predictions-
+```{r}
+pred1 <- predict(reducedmodel4, test.data)
+pred1 <- cbind(pred1, test.data$Response)
+colnames(pred1) <- c("Prediction", "True")
+View(pred1)
+```
+Comment: 
+Errors-
+```{r}
+error <- mean((test.data$Response - predict.lm(reducedmodel4, test.data)) ^ 2)
+actual.error <- sqrt(error)
+actual.error
+error1 <- cbind(pred1, abs((test.data$Response - predict.lm(reducedmodel4, test.data))) / (0.01 * test.data$Response))
+colnames(error1) <- c("Prediction", "True", "Error")
+View(error1)
+error1 <- as.data.frame(error1)
+error.percentage <- mean(error1$Error)
+error.percentage
+```
+Comment: 
+As we see, the mean actual error from our reduced model is around 5.44%, which means that the model is highly acccurate.
+
+Question 2-
+
+Ctree Model-
+
+Loading the required libraries-
+```{r}
+library(arules)
+library(arulesViz)
+library(party)
+```
+Comment: 
+Discretize the Response Variable
+```{r}
+xy1 <- read_excel("~/Desktop/Data Mining 809N/809N Project/xy1.xlsx")
+xy1$Response <- as.numeric(xy1$Response)
+xy1$Categorical_Response <- discretize(xy1$Response, breaks = 6)
+levels(xy1$Categorical_Response)
+xy1$Categorical_Response <- discretize(xy1$Response, breaks = 6, labels = c("a", "b", "c", "d", "e", "f"))
+levels(xy1$Categorical_Response)
+```
+Comment: 
+Refrences for each response class labels-
+
+a = [1.21e+03,1.89e+03)
+b = [1.89e+03,2.19e+03)
+c = [2.19e+03,2.32e+03)
+d = [2.32e+03,2.47e+03)
+e = [2.47e+03,2.55e+03)
+f = [2.55e+03,3.02e+03]
+```{r}
+xy1$Categorical_Response <- as.factor(xy1$Categorical_Response)
+View(xy1)
+```
+Comment: 
+Spliting the dataset into testset and trainset
+```{r}
+set.seed(7658)
+index <- sample(2, nrow(xy1), replace = T, prob = c(0.7, 0.3))
+train.data <- xy1[index == 1, ]
+View(train.data)
+test.data <- xy1[index == 2, ]
+View(test.data)
+```
+Comment: 
+Confirming the split done
+```{r}
+dim(xy1)
+dim(train.data)
+dim(test.data)
+```
+Comment: 
+As we can see that the dataset has been splitted properly.
+
+ctree Model-
+```{r}
+pQData_ctree <- ctree(Categorical_Response ~ Var05 + Var06 + Var18, data = train.data)
+pQData_ctree
+```
+Comment: 
+If-then rules (found manually)-
+
+1) If Var18 <= 119.5, then probability that categorical response belongs to [a, b, c, d, e, f] is [0.769, 0, 0.077, 0.077, 0.077, 0] respectively.
+2) If Var18 > 119.5 and Var18 <= 128.9, then probability that categorical response belongs to [a, b, c, d, e, f] is [0, 0.714, 0.143, 0, 0, 0.143] respectively.
+3) If Var18 > 128.9 and Var18 <= 136.8, then probability that categorical response belongs to [a, b, c, d, e, f] is [0, 0, 0.727, 0.091, 0.091, 0.091] respectively.
+4) If Var18 > 136.8 and Var18 <= 150.6, then probability that categorical response belongs to [a, b, c, d, e, f] is [0, 0, 0, 0.2, 0.667, 0.133] respectively.
+5) If Var18 > 150.6, then probability that categorical response belongs to [a, b, c, d, e, f] is [0.083, 0.083, 0, 0.25, 0, 0.583] respectively.
+
+Plot-
+```{r}
+plot(pQData_ctree, type = "simple", main = "Decision Tree Model")
+```
+Comment: 
+Predictions from model-
+```{r}
+pred2 <- predict(pQData_ctree, test.data, type = "response")
+pred2 <- data.frame(pred2, test.data$Categorical_Response)
+colnames(pred2) <- c("Prediction", "True")
+View(pred2)
+```
+Comment: 
+Error-
+```{r}
+pred2 <- predict(pQData_ctree, test.data)
+error_matrix <- table(Predicted = pred2, True = test.data$Categorical_Response)
+error_matrix
+
+acc_val <- sum(diag(error_matrix)) / sum(error_matrix)
+acc_val
+```
+Comment: 
+As we see, the accuracy in this case is around 50 % which is significantly less.
+
+Decision tree using C5.0-
+```{r}
+library(arules)
+library(arulesViz)
+library(party)
+xy1 <- read_excel("~/Desktop/Data Mining 809N/809N Project/xy1.xlsx")
+xy1$Response <- as.numeric(xy1$Response)
+xy1$Categorical_Response <- discretize(xy1$Response, breaks = 6)
+levels(xy1$Categorical_Response)
+xy1$Categorical_Response <- discretize(xy1$Response, breaks = 6, labels = c("a", "b", "c", "d", "e", "f"))
+levels(xy1$Categorical_Response)
+xy1$Categorical_Response <- as.factor(xy1$Categorical_Response)
+set.seed(7658)
+index <- sample(2, nrow(xy1), replace = T, prob = c(0.7, 0.3))
+train.data <- xy1[index == 1, ]
+View(train.data)
+test.data <- xy1[index == 2, ]
+View(test.data)
+library(C50)
+tree <- C5.0(Categorical_Response ~ Var05 + Var06 + Var11 + Var15 + Var18, data = train.data)
+tree
+```
+Comment: 
+If-then rules (found manually)-
+
+1) If Var06 <= 284.5, then Categorical Response belongs to class a.
+2) If Var06 > 284.5 and Var18 <= 136.8, Var18 <= 119.1 and Var15 <= 142 then Categorical Response belongs to class a.
+3) If Var06 > 284.5 and Var18 <= 136.8, Var18 <= 119.1 and Var15 > 142 then Categorical Response belongs to class c.
+4) If Var06 > 284.5 and Var18 <= 136.8, Var18 > 119.1 and Var15 <= 182 and Var06 <= 491.8 then Categorical Response belongs to class c.
+5) If Var06 > 284.5 and Var18 <= 136.8, Var18 > 119.1 and Var15 <= 182 and Var06 > 491.8 then Categorical Response belongs to class b.
+6) If Var06 > 284.5 and Var18 <= 136.8, Var18 > 119.1 and Var15 > 182 and Var18 <= 128.9 then Categorical Response belongs to class b.
+7) If Var06 > 284.5 and Var18 <= 136.8, Var18 > 119.1 and Var15 > 182 and Var18 > 128.9 then Categorical Response belongs to class e.
+8) If Var06 > 284.5 and Var18 > 136.8, Var18 <= 150.6, Var18 <= 146.6 and Var05 <= 109.6 then Categorical Response belongs to class e.
+9) If Var06 > 284.5 and Var18 > 136.8, Var18 <= 150.6, Var18 <= 146.6 and Var05 > 109.6 then Categorical Response belongs to class d.
+10) If Var06 > 284.5 and Var18 > 136.8, Var18 <= 150.6, Var18 > 146.6 then Categorical Response belongs to class e.
+11) If Var06 > 284.5 and Var18 > 136.8, Var18 > 150.6 and Var05 <= 137.6 then Categorical Response belongs to class d.
+12) If Var06 > 284.5 and Var18 > 136.8, Var18 > 150.6 and Var05 > 137.6 then Categorical Response belongs to class f.
+
+Plot-
+```{r}
+plot(tree, type = "simple", main = "Decision Tree Model")
+```
+Comment: 
+Predictions from model-
+```{r}
+pred3 <- predict(tree, test.data, type = "class")
+pred3 <- data.frame(pred3, test.data$Categorical_Response)
+colnames(pred3) <- c("Prediction", "True")
+View(pred3)
+```
+Comment: Error-
+```{r}
+pred3 <- predict(tree, test.data)
+error_matrix2 <- table(pred3, test.data$Categorical_Response)
+error_matrix2
+
+acc_val2 <- sum(diag(error_matrix2)) / sum(error_matrix2)
+acc_val2
+```
+Comment: As we can see, the accuracy of the decision tree is increased from 0.5 to 0.5454 by using C5.0 algorithm.
+
+If-then rules using apriori-
+
+Creating a new data object with only required variables-
+```{r}
+xy1_rules <- xy1[, c(1, 6, 7, 12, 16, 19)]
+View(xy1_rules)
+```
+Comment: 
+Making each column a factor variable
+```{r}
+xy1_rules$Response <- discretize(xy1_rules$Response, breaks = 6, labels = c(1, 2, 3, 4, 5, 6))
+```
+Comment: 
+In xy1_rules$Response, class [1, 2, 3, 4, 5, 6] corresponds to [[1.21e+03,1.89e+03), [1.89e+03,2.19e+03), [2.19e+03,2.32e+03), [2.32e+03,2.47e+03), [2.47e+03,2.55e+03), [2.55e+03,3.02e+03]] respectively.
+```{r}
+xy1_rules$Var05 <- discretize(xy1_rules$Var05, breaks = 3, labels = c(1, 2, 3))
+```
+Comment: 
+In xy1_rules$Var05, class [1, 2, 3] corresponds to [[64.8,101), [101,146), [146,244]] respectively.
+```{r}
+xy1_rules$Var06 <- discretize(xy1_rules$Var06, breaks = 3, labels = c(1, 2, 3))
+```
+Comment: 
+In xy1_rules$Var06, class [1, 2, 3] corresponds to [[206,326), [326,385), [385,578]] respectively.
+```{r}
+xy1_rules$Var11 <- discretize(xy1_rules$Var11, breaks = 3, labels = c(1, 2, 3))
+```
+Comment: 
+In xy1_rules$Var11, class [1, 2, 3] corresponds to [[261,345), [345,420), [420,662]] respectively.
+```{r}
+xy1_rules$Var15 <- discretize(xy1_rules$Var15, breaks = 3, labels = c(1, 2, 3))
+```
+Comment: In xy1_rules$Var15, class [1, 2, 3] corresponds to [[112,139), [139,176), [176,200]] respectively.
+```{r}
+xy1_rules$Var18 <- discretize(xy1_rules$Var18, breaks = 3, labels = c(1, 2, 3))
+```
+Comment: 
+In xy1_rules$Var18, class [1, 2, 3] corresponds to [82.5,125), [125,145), [145,190]] respectively.
+```{r}
+xy1_rules <- data.frame(xy1_rules)
+```
+Comment: 
+Apply apriori function
+```{r, error=TRUE}
+library(arules)
+library(arulesViz)
+rules <- apriori(xy1_rules)
+rules.sorted <- sort(rules, by = "lift")
+rules.pruned <- rules.sorted[!is.redundant(rules.sorted)]
+inspect(rules.pruned)
+```
+Comment:
+There are 27 rules.
+
+
+
+
+
+
+
+
+
+
